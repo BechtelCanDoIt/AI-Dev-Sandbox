@@ -31,6 +31,7 @@ Your machine
               └── ai-dev-sandbox:latest        ← WHERE YOU WORK  (INNER layer)
                     ├── Claude Code  (claude)
                     ├── OpenCode     (opencode)
+                    ├── Codex        (chatgpt)
                     ├── ChatGPT CLI  (chatgpt)
                     ├── Gemini CLI   (gemini)
                     ├── GitHub CLI   (gh)
