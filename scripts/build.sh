@@ -20,14 +20,17 @@
 #   5. Build the host image (Dockerfile.host — embeds ai-dev-sandbox.ext4)
 #
 # Prerequisites:
-#   - firecracker-base:latest already built  (cd ../firecracker-base && ./build.sh)
+#   - firecracker-base:latest — if missing, auto-cloned into a throwaway ./tmp
+#     directory, built, and ./tmp is deleted (see FC_BASE_REPO_URL /
+#     FC_BASE_AUTO_BUILD below). For manual control: cd ../firecracker-base && ./build.sh
 #   - Docker with BuildKit support
 #   - Privilege to run a --privileged container (for the loop mount step)
 #
 # Usage (via ai):
 #   ./ai build                  Full build
 #   ./ai build clean          Remove .build/ then full build
-#   ./ai build inner-only     Rebuild just the inner image
+#   ./ai build inner-only     Rebuild just the inner image (host Docker only —
+#                             does NOT update the copy baked into the VM rootfs)
 #   ./ai build host-only      Rebuild just the host image (needs .build/ai-dev-sandbox.ext4)
 #   ./ai build inject-only    Redo only the rootfs injection step
 # =============================================================================
@@ -40,6 +43,9 @@ HOST_IMAGE="${HOST_IMAGE:-ai-dev-sandbox-host:latest}"
 FC_BASE_IMAGE="${FC_BASE_IMAGE:-firecracker-base:latest}"
 # Path to base.ext4 inside the firecracker-base image
 FC_BASE_ROOTFS_PATH="${FC_BASE_ROOTFS_PATH:-/var/lib/firecracker/rootfs/base.ext4}"
+FC_BASE_REPO_URL="${FC_BASE_REPO_URL:-git@github.com:BechtelCanDoIt/firecracker-base.git}"
+# Set to 0 to restore the old fail-fast behavior instead of auto-clone/build
+FC_BASE_AUTO_BUILD="${FC_BASE_AUTO_BUILD:-1}"
 # Extra MB added to the rootfs to hold the ai-dev-sandbox image tar + Docker metadata
 AI_SANDBOX_ROOTFS_EXTRA_MB="${AI_SANDBOX_ROOTFS_EXTRA_MB:-6144}"
 
@@ -47,6 +53,10 @@ AI_SANDBOX_ROOTFS_EXTRA_MB="${AI_SANDBOX_ROOTFS_EXTRA_MB:-6144}"
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPTS_DIR/.." && pwd)"
 BUILD_DIR="$PROJECT_DIR/.build"
+# Throwaway clone of https://github.com/BechtelCanDoIt/firecracker-base,
+# used only to build the firecracker-base:latest image, then deleted.
+FC_BASE_TMP_DIR="$PROJECT_DIR/tmp"
+FC_BASE_DIR="$FC_BASE_TMP_DIR/firecracker-base"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -129,15 +139,48 @@ build_host_image() {
     log_ok "Host image built: $HOST_IMAGE"
 }
 
+# ─── Ensure firecracker-base is built ─────────────────────────────────────────
+ensure_firecracker_base() {
+    # Always start from a clean throwaway clone — never reuse a stale one.
+    rm -rf "$FC_BASE_TMP_DIR"
+    trap 'rm -rf "$FC_BASE_TMP_DIR"' EXIT
+
+    log_info "Cloning firecracker-base into $FC_BASE_DIR (deleted after build)"
+    git clone "$FC_BASE_REPO_URL" "$FC_BASE_DIR"
+
+    if [ ! -x "$FC_BASE_DIR/build.sh" ]; then
+        log_error "Cloned firecracker-base but build.sh is missing/not executable"
+        exit 1
+    fi
+
+    log_step "Building firecracker-base first (missing image: $FC_BASE_IMAGE)"
+    ( cd "$FC_BASE_DIR" && ./build.sh )
+
+    log_info "Cleaning up $FC_BASE_TMP_DIR"
+    rm -rf "$FC_BASE_TMP_DIR"
+    trap - EXIT
+
+    if ! docker image inspect "$FC_BASE_IMAGE" &>/dev/null 2>&1; then
+        log_error "firecracker-base build completed but $FC_BASE_IMAGE still not found"
+        log_error "Check the firecracker-base build output above, or build manually:"
+        log_error "  git clone $FC_BASE_REPO_URL ../firecracker-base && cd ../firecracker-base && ./build.sh"
+        exit 1
+    fi
+}
+
 # ─── Preflight checks ─────────────────────────────────────────────────────────
 preflight() {
     # Check firecracker-base exists
     if ! docker image inspect "$FC_BASE_IMAGE" &>/dev/null 2>&1; then
-        log_error "Base image not found: $FC_BASE_IMAGE"
-        log_error ""
-        log_error "Build firecracker-base first:"
-        log_error "  cd ../firecracker-base && ./build.sh"
-        exit 1
+        if [ "$FC_BASE_AUTO_BUILD" = "1" ]; then
+            ensure_firecracker_base
+        else
+            log_error "Base image not found: $FC_BASE_IMAGE"
+            log_error ""
+            log_error "Build firecracker-base first:"
+            log_error "  cd ../firecracker-base && ./build.sh"
+            exit 1
+        fi
     fi
     log_ok "Base image found: $FC_BASE_IMAGE"
 }
@@ -152,7 +195,10 @@ Usage: ./ai build [OPTIONS]
 Options:
   help, -h, --help  Show this help
   clean             Remove .build/ directory then do a full build
-  inner-only        Build only the inner image  (ai-dev-sandbox:latest)
+  inner-only        Build only the inner image  (ai-dev-sandbox:latest).
+                    Host Docker only, for direct docker-run testing — the VM
+                    keeps its baked-in copy. To get inner-image changes into
+                    the VM: ./ai stop && ./ai build && ./ai
   inject-only       Re-run only rootfs injection (needs .build/base.ext4 + .build/ai-dev-sandbox.tar)
   host-only         Build only the host image   (needs .build/ai-dev-sandbox.ext4)
 
@@ -172,7 +218,7 @@ Build sequence:
 Examples:
   ./ai build                            # Full build
   ./ai build clean                    # Clean rebuild
-  ./ai build inner-only               # Iterate on inner image only
+  ./ai build inner-only               # Inner image for direct docker-run testing (does not update the VM)
   AI_SANDBOX_ROOTFS_EXTRA_MB=8192 ./ai build  # Larger rootfs
 EOF
 }

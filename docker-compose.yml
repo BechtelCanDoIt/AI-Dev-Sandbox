@@ -13,7 +13,8 @@
 #                       └── ai-dev-sandbox:latest  ← developer works here
 #
 # Prerequisites:
-#   1. firecracker-base built:  cd ../firecracker-base && ./build.sh
+#   1. firecracker-base built: ./ai build auto-clones + builds it into a
+#      throwaway ./tmp dir if missing (manual: cd ../firecracker-base && ./build.sh)
 #   2. ai-dev-sandbox built:        ./build.sh
 #   3. KVM enabled on host:     see TURNONKVM.md in firecracker-base
 #

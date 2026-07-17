@@ -53,6 +53,7 @@ check_ollama() {
     command -v claude    &>/dev/null && echo "    ✓ claude     (Claude Code)" || echo "    ✗ claude     (not installed)"
     command -v opencode  &>/dev/null && echo "    ✓ opencode   (OpenCode)"    || echo "    ✗ opencode   (not installed)"
     command -v chatgpt   &>/dev/null && echo "    ✓ chatgpt    (ChatGPT CLI)" || echo "    ✗ chatgpt    (not installed)"
+    command -v codex     &>/dev/null && echo "    ✓ codex      (OpenAI Codex)" || echo "    ✗ codex      (not installed)"
     command -v gemini    &>/dev/null && echo "    ✓ gemini     (Gemini CLI)"  || echo "    ✗ gemini     (not installed)"
     echo ""
 
@@ -86,6 +87,8 @@ check_ollama() {
     echo -e "  ${YELLOW}Quick Start:${NC}"
     echo "    claude               # Start Claude Code"
     echo "    opencode             # Start OpenCode"
+    echo "    codex                # Start OpenAI Codex"
     echo "    gemini               # Start Gemini CLI"
     echo "    voice ai-tool-name   # Voice chat (if audio available)"
+    echo "    menu                 # Show this banner again"
     echo ""

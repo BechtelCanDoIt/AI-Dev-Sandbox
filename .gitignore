@@ -1,6 +1,9 @@
 # Build artifacts — never commit these (ext4 images can be multi-GB)
 .build/
 
+# Throwaway firecracker-base clone used by ./ai build, deleted after build
+tmp/
+
 # Local env (contains API keys)
 .env
 

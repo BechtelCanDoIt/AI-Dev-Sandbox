@@ -111,7 +111,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip python3-venv \
     golang-go \
     rustc cargo \
-    nodejs npm \
     # Audio (gracefully optional — skipped if no PulseAudio socket)
     pulseaudio-utils alsa-utils \
     libportaudio2 portaudio19-dev \
@@ -121,6 +120,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
 
+
+# ─── Node.js 22 (NodeSource) ──────────────────────────────────────────────────
+# Ubuntu 24.04 ships Node 18, which is too old for the AI CLIs:
+#   @anthropic-ai/claude-code needs Node >= 22, @google/gemini-cli needs >= 20
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 # ─── GitHub CLI ───────────────────────────────────────────────────────────────
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -146,7 +152,7 @@ RUN ln -s /opt/piper/piper /usr/local/bin/piper && \
 # Add Lang/LC_ALL settings to avoid any potential locale-related issues in tools or scripts
 RUN echo "export LANG=C.UTF-8" >> /home/sandbox/.bashrc && \
     echo "export LC_ALL=C.UTF-8" >> /home/sandbox/.bashrc && \
-    echo "source ~/.env" >> /home/sandbox/.bashrc
+    echo '[ -f ~/.env ] && source ~/.env || true' >> /home/sandbox/.bashrc
 
 # ─── Scripts ──────────────────────────────────────────────────────────────────
 COPY --chown=sandbox:sandbox scripts/entrypoint.sh /opt/scripts/entrypoint.sh
@@ -163,8 +169,9 @@ USER sandbox
 WORKDIR /home/sandbox
 ENV HOME=/home/sandbox
 
-# PATH: local bin → go bin → cargo bin → npm-global bin → system
-ENV PATH=/home/sandbox/.local/bin:/home/sandbox/go/bin:/home/sandbox/.cargo/bin:/home/sandbox/.npm-global/bin:$PATH
+# PATH: local bin → go bin → cargo bin → npm-global bin → opencode bin → system
+# (opencode's installer puts its binary in ~/.opencode/bin; codex uses ~/.local/bin)
+ENV PATH=/home/sandbox/.local/bin:/home/sandbox/go/bin:/home/sandbox/.cargo/bin:/home/sandbox/.npm-global/bin:/home/sandbox/.opencode/bin:$PATH
 
 # Go, Cargo, Rust env
 ENV GOPATH=/home/sandbox/go \
@@ -179,7 +186,8 @@ RUN npm config set prefix '/home/sandbox/.npm-global' && \
 RUN ln -sf /opt/scripts/stt   ~/.local/bin/stt   && \
     ln -sf /opt/scripts/tts   ~/.local/bin/tts   && \
     ln -sf /opt/scripts/voice ~/.local/bin/voice && \
-    ln -sf /opt/scripts/banner.sh ~/.local/bin/banner.sh
+    ln -sf /opt/scripts/banner.sh ~/.local/bin/banner.sh && \
+    ln -sf /opt/scripts/banner.sh ~/.local/bin/menu
 
 # ─── Environment ──────────────────────────────────────────────────────────────
 ENV WHISPER_MODEL_PATH=/models/whisper \

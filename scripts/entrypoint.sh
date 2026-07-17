@@ -75,8 +75,6 @@ setup_home() {
 # =============================================================================
 # AI CLI tool installers
 # Each is idempotent — checks for the binary first.
-# npm-based installs run sequentially (shared global store).
-# Go-based installs can run in parallel with npm.
 # After the first run ~/.sandbox_initialized persists in the home volume,
 # so subsequent container starts skip this entirely.
 # =============================================================================
@@ -100,7 +98,7 @@ install_codex() {
         return 0
     fi
     log_info "Installing Codex (chatgpt.com/codex)..."
-    if curl -fsSL https://chatgpt.com/codex/install.sh | sh 2>/tmp/codex-install.log; then
+    if curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh 2>/tmp/codex-install.log; then
         log_success "Codex installed"
     else
         log_warn "Codex install failed (check /tmp/codex-install.log)"
@@ -169,9 +167,11 @@ setup_voice_mode() {
 # Ollama connectivity check
 # =============================================================================
 check_ollama() {
-    echo "enter check_ollama function"
     local host="${OLLAMA_HOST:-}"
-    [ -z "$host" ] && log_error "OLLAMA_HOST is not set" && return 0
+    if [ -z "$host" ]; then
+        log_warn "OPTIONAL - Ollama: OLLAMA_HOST not set - skipping check."
+        return 0
+    fi
 
     if curl -sf --max-time 3 "$host/api/tags" >/dev/null 2>&1; then
         local models
@@ -181,7 +181,6 @@ check_ollama() {
     else
         log_warn "OPTIONAL - Ollama: cannot reach $host - install on host or cloud."
     fi
-    echo "exit check_ollama function"
 }
 
 # =============================================================================
@@ -199,17 +198,13 @@ main() {
 
     setup_home
 
-    # Install AI CLIs:
-    #   - npm-based tools run sequentially (shared global store)
-    #   - Go and curl-based tools run in parallel alongside npm
-    install_opencode 
-    install_chatgpt_cli 
+    # Install AI CLIs sequentially — each is idempotent and warns (not dies)
+    # on failure, with a log left in /tmp/<tool>-install.log
+    install_opencode
+    install_chatgpt_cli
     install_codex
-
     install_claude_code
     install_gemini_cli
-
-    wait || true   # collect background jobs; don't die if one failed
 
     # Pre-seed Claude Code config to skip the interactive theme picker
     # (which can freeze on some terminal setups)

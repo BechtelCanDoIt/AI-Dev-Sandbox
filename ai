@@ -93,10 +93,25 @@ cmd_start() {
         echo ""
     fi
 
-    # ── Already running? Just re-attach ───────────────────────────────────
+    # ── Already running? Re-attach — unless a newer image has been built ──
     if is_running; then
-        log_ok "Sandbox is already running"
-        attach
+        local running_image current_image
+        running_image=$(docker inspect --format '{{.Image}}' "$CONTAINER_NAME" 2>/dev/null)
+        current_image=$(docker image inspect --format '{{.Id}}' "$HOST_IMAGE" 2>/dev/null)
+        if [ -n "$current_image" ] && [ "$running_image" != "$current_image" ]; then
+            log_warn "Running sandbox was started from an older ${HOST_IMAGE} build."
+            read -r -p "  Restart with the new image? VM state is lost; /workspace is kept. [y/N] " reply
+            if [[ "$reply" =~ ^[Yy]$ ]]; then
+                log_info "Stopping old sandbox..."
+                docker compose -f "$COMPOSE_FILE" down
+            else
+                log_ok "Re-attaching to the running (older) sandbox"
+                attach
+            fi
+        else
+            log_ok "Sandbox is already running"
+            attach
+        fi
     fi
 
     # ── Clean up stale container if it exists but isn't running ───────────
@@ -229,7 +244,8 @@ cmd_help() {
                   If already running, re-attaches to the existing session.
     ${GREEN}build${NC}         Build the Docker images. Accepts build.sh options:
                       clean        Clean rebuild (removes .build/)
-                      inner-only   Rebuild the inner image only
+                      inner-only   Rebuild the inner image only (host Docker
+                                   only — does NOT update the image inside the VM)
                       inject-only  Re-run rootfs injection only
                       host-only    Rebuild the host image only
     ${GREEN}stop${NC}          Stop the sandbox (docker compose down)

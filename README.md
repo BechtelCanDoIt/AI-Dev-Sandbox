@@ -31,7 +31,7 @@ Your machine
               └── ai-dev-sandbox:latest        ← WHERE YOU WORK  (INNER layer)
                     ├── Claude Code  (claude)
                     ├── OpenCode     (opencode)
-                    ├── Codex        (chatgpt)
+                    ├── Codex        (codex)
                     ├── ChatGPT CLI  (chatgpt)
                     ├── Gemini CLI   (gemini)
                     ├── GitHub CLI   (gh)
@@ -47,6 +47,13 @@ Your host workspace (`./workspace/`) is shared into the VM at `/workspace`, and 
 1. Linux host with KVM enabled — see `TURNONKVM.md` in `BechtelCanDoIt/firecracker-base` project
 2. Docker with BuildKit
 
+`firecracker-base` itself doesn't need to be cloned ahead of time — if the
+`firecracker-base:latest` image isn't found, `./ai build` clones it into a
+throwaway `./tmp/firecracker-base` directory, builds the image, then deletes
+`./tmp`. To manage it yourself instead, clone and build it manually
+(`cd .. && git clone git@github.com:BechtelCanDoIt/firecracker-base.git && cd firecracker-base && ./build.sh`)
+and set `FC_BASE_AUTO_BUILD=0` when building.
+
 ## Build
 
 ```bash
@@ -59,7 +66,7 @@ cp .env.template .env
 Build steps (automated by ai cli calling `build.sh`):
 1. `docker build` — inner `ai-dev-sandbox:latest` image
 2. `docker save` — exports it to `.build/ai-dev-sandbox.tar`
-3. Extracts `base.ext4` from `firecracker-base:latest`
+3. Extracts `base.ext4` from `firecracker-base:latest` (auto-cloned into a throwaway `./tmp` dir, built, and `./tmp` deleted first if missing)
 4. Resizes + patches it → `.build/ai-dev-sandbox.ext4`
    - Pre-bakes `ai-dev-sandbox.tar` into the rootfs
    - Installs `load-ai-dev-sandbox.service` (loads image on first guest boot)
@@ -112,6 +119,7 @@ Set in `.env` (copied from `.env.template`):
 # AI Tools (installed on first startup, cached after that)
 claude          # Claude Code
 opencode        # OpenCode
+codex           # OpenAI Codex
 gemini          # Gemini CLI
 chatgpt         # ChatGPT CLI
 
