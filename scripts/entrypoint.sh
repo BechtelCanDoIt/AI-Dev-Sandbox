@@ -94,6 +94,19 @@ install_claude_code() {
     fi
 }
 
+install_codex() {
+    if command -v codex &>/dev/null; then
+        log_success "codex: $(codex --version 2>/dev/null | head -1 || echo 'installed')"
+        return 0
+    fi
+    log_info "Installing Codex (chatgpt.com/codex)..."
+    if curl -fsSL https://chatgpt.com/codex/install.sh | sh 2>/tmp/codex-install.log; then
+        log_success "Codex installed"
+    else
+        log_warn "Codex install failed (check /tmp/codex-install.log)"
+    fi
+}
+
 install_opencode() {
     if command -v opencode &>/dev/null; then
         log_success "OpenCode: $(opencode --version 2>/dev/null | head -1 || echo 'installed')"
@@ -191,6 +204,7 @@ main() {
     #   - Go and curl-based tools run in parallel alongside npm
     install_opencode 
     install_chatgpt_cli 
+    install_codex
 
     install_claude_code
     install_gemini_cli
